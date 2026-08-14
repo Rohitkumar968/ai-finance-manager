@@ -1,16 +1,16 @@
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 
-/**
- * Connect to MongoDB Atlas using Mongoose.
- * Exits process on failure so process managers (PM2 / Render) can restart cleanly.
- */
 const connectDB = async () => {
   try {
     mongoose.set('strictQuery', true);
 
+    if (!process.env.MONGO_URI) {
+      throw new Error('MONGO_URI is not defined in environment variables');
+    }
+
     const conn = await mongoose.connect(process.env.MONGO_URI, {
-      // Mongoose 8 no longer needs useNewUrlParser/useUnifiedTopology, kept out intentionally.
+      serverSelectionTimeoutMS: 10000,
     });
 
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
@@ -20,16 +20,22 @@ const connectDB = async () => {
     });
 
     mongoose.connection.on('disconnected', () => {
-      logger.warn('MongoDB disconnected. Attempting to reconnect is handled by the driver.');
+      logger.warn('MongoDB disconnected.');
     });
-  // } catch (error) {
-  //   logger.error(`MongoDB initial connection failed: ${error.message}`);
-  //   process.exit(1);
-  // }
-} catch (error) {
-  console.error(error);
-  process.exit(1);
-}
+
+    return conn;
+  } catch (error) {
+    console.error(
+      '❌ MongoDB initial connection failed:',
+      error.message
+    );
+
+    logger.error(
+      `MongoDB initial connection failed: ${error.message}`
+    );
+
+    process.exit(1);
+  }
 };
 
 module.exports = connectDB;
