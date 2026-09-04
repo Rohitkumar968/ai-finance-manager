@@ -21,13 +21,32 @@ const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 
+// Trust Render's reverse proxy
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 
-// CORS - allow the frontend client with credentials (cookies)
+// CORS - allow both local development and live frontend
+const allowedOrigins = [
+  'https://rohit-ai-finance-manager.vercel.app',
+  'http://localhost:5173',
+];
+
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: function (origin, callback) {
+      // Allow requests without an Origin header
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error('Not allowed by CORS'));
+    },
     credentials: true,
   })
 );
@@ -47,7 +66,9 @@ if (process.env.NODE_ENV !== 'production') {
 } else {
   app.use(
     morgan('combined', {
-      stream: { write: (message) => logger.info(message.trim()) },
+      stream: {
+        write: (message) => logger.info(message.trim()),
+      },
     })
   );
 }
@@ -59,14 +80,18 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
 app.use('/api', globalLimiter);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ success: true, message: 'AI Finance Manager API is running.' });
+  res.status(200).json({
+    success: true,
+    message: 'AI Finance Manager API is running.',
+  });
 });
 
-// Maintenance mode gate - checks SystemSetting, blocks non-admin traffic if enabled
+// Maintenance mode gate
 app.use(checkMaintenanceMode);
 
 // Routes
